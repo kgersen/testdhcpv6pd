@@ -39,7 +39,7 @@ func parseInterface(name string) (*net.Interface, error) {
 		return i, nil
 	}
 	//try index
-	if n, err := strconv.Atoi(name); err != nil {
+	if n, err := strconv.Atoi(name); err == nil {
 		i, err := net.InterfaceByIndex(n)
 		if err != nil {
 			return nil, fmt.Errorf("interface index not found")
@@ -48,8 +48,16 @@ func parseInterface(name string) (*net.Interface, error) {
 	}
 	return nil, fmt.Errorf("interface not found")
 }
+
+var (
+	optPrefixLength = flag.Int("l", 64, "prefix length")
+)
+
 func main() {
 	flag.Parse()
+	if *optPrefixLength < 1 || *optPrefixLength > 128 {
+		log.Fatal("prefix length")
+	}
 	if len(flag.Args()) != 1 {
 		fmt.Printf("Usage: %s [interface name] or [interface index]\n", os.Args[0])
 		displayInterfaces()
@@ -60,11 +68,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Starting DHCPv6 client on interface %s", iface.Name)
+	log.Printf("Sending a DHCPv6-PD Solicit on interface %s", iface.Name)
 
-	// NewClient sets up a new DHCPv6 client with default values
-	// for read and write timeouts, for destination address and listening
-	// address
 	client, err := nclient6.New(iface.Name,
 		nclient6.WithTimeout(2*time.Second),
 		nclient6.WithRetry(1),
@@ -74,23 +79,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Exchange runs a Solicit-Advertise-Request-Reply transaction on the
-	// specified network interface, and returns a list of DHCPv6 packets
-	// (a "conversation") and an error if any. Notice that Exchange may
-	// return a non-empty packet list even if there is an error. This is
-	// intended, because the transaction may fail at any point, and we
-	// still want to know what packets were exchanged until then.
-	// A default Solicit packet will be used during the "conversation",
-	// which can be manipulated by using modifiers.
-	//conversation, err := client.Exchange(*iface)
-
+	// send a Solicit with IAPD, no IAID
 	adv, err := Solicit(context.Background(), client, dhcpv6.WithIAPD(
 		[4]byte{1, 0, 0, 0},
 		&dhcpv6.OptIAPrefix{
 			PreferredLifetime: 0,
 			ValidLifetime:     0,
 			Prefix: &net.IPNet{
-				Mask: net.CIDRMask(64, 128),
+				Mask: net.CIDRMask(*optPrefixLength, 128),
 				IP:   net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 			},
 			Options: dhcpv6.PrefixOptions{Options: dhcpv6.Options{}},
@@ -99,7 +95,24 @@ func main() {
 
 	// Summary() prints a verbose representation of the exchanged packets.
 	if adv != nil {
-		log.Print(adv.Summary())
+		if adv.MessageType != dhcpv6.MessageTypeAdvertise {
+			log.Fatal("unexcepted message type")
+		}
+		IAPDOption := adv.GetOneOption(dhcpv6.OptionIAPD)
+		if IAPDOption == nil {
+			log.Fatal("no IAPD found")
+		}
+		iapd := dhcpv6.OptIAPD{}
+		if err := iapd.FromBytes(IAPDOption.ToBytes()); err != nil {
+			log.Fatal("cant parse iadp")
+		}
+		prefixes := iapd.Options.Prefixes()
+		if prefixes == nil {
+			log.Fatal("no prefix found")
+		}
+		for _, p := range prefixes {
+			fmt.Printf("prefix = %s (pttl=%s,vttl=%s)\n", p.Prefix, p.PreferredLifetime, p.ValidLifetime)
+		}
 	}
 	// error handling is done *after* printing, so we still print the
 	// exchanged packets if any, as explained above.
@@ -110,6 +123,7 @@ func main() {
 
 // NewSolicit creates a new SOLICIT message, using the given hardware address to
 // derive the IAID in the IA_NA option.
+// same as nclient6/NewSolicit but without IAID
 func NewSolicit(hwaddr net.HardwareAddr, modifiers ...dhcpv6.Modifier) (*dhcpv6.Message, error) {
 	duid := &dhcpv6.DUIDLLT{
 		HWType:        iana.HWTypeEthernet,
@@ -143,6 +157,7 @@ func NewSolicit(hwaddr net.HardwareAddr, modifiers ...dhcpv6.Modifier) (*dhcpv6.
 
 // Solicit sends a solicitation message and returns the first valid
 // advertisement received.
+// same as nclient6.Solicit but using NewSolicit above (no IAID)
 func Solicit(ctx context.Context, c *nclient6.Client, modifiers ...dhcpv6.Modifier) (*dhcpv6.Message, error) {
 	solicit, err := NewSolicit(c.InterfaceAddr(), modifiers...)
 	if err != nil {
