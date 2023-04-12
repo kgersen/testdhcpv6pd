@@ -1,28 +1,78 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net"
+	"os"
+	"strconv"
+	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv6"
-	"github.com/insomniacslk/dhcp/dhcpv6/client6"
+	"github.com/insomniacslk/dhcp/dhcpv6/nclient6"
 	"github.com/insomniacslk/dhcp/iana"
 )
 
-var (
-	iface = flag.String("i", "eth0", "Interface to configure via DHCPv6")
-)
+var interfaces []net.Interface
 
+func init() {
+	var err error
+	interfaces, err = net.Interfaces()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func displayInterfaces() {
+	fmt.Println("available interface - name (index):")
+	for _, v := range interfaces {
+		fmt.Printf("%s (%d)\n", v.Name, v.Index)
+	}
+}
+func parseInterface(name string) (*net.Interface, error) {
+	//try name
+	i, err := net.InterfaceByName(name)
+	if err == nil {
+		return i, nil
+	}
+	//try index
+	if n, err := strconv.Atoi(name); err != nil {
+		i, err := net.InterfaceByIndex(n)
+		if err != nil {
+			return nil, fmt.Errorf("interface index not found")
+		}
+		return i, nil
+	}
+	return nil, fmt.Errorf("interface not found")
+}
 func main() {
 	flag.Parse()
-	log.Printf("Starting DHCPv6 client on interface %s", *iface)
+	if len(flag.Args()) != 1 {
+		fmt.Printf("Usage: %s [interface name] or [interface index]\n", os.Args[0])
+		displayInterfaces()
+		os.Exit(0)
+	}
+
+	iface, err := parseInterface(flag.Args()[0])
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Starting DHCPv6 client on interface %s", iface.Name)
 
 	// NewClient sets up a new DHCPv6 client with default values
 	// for read and write timeouts, for destination address and listening
 	// address
-	client := client6.NewClient()
+	client, err := nclient6.New(iface.Name,
+		nclient6.WithTimeout(2*time.Second),
+		nclient6.WithRetry(1),
+		nclient6.WithDebugLogger())
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Exchange runs a Solicit-Advertise-Request-Reply transaction on the
 	// specified network interface, and returns a list of DHCPv6 packets
@@ -34,7 +84,7 @@ func main() {
 	// which can be manipulated by using modifiers.
 	//conversation, err := client.Exchange(*iface)
 
-	sol, adv, err := Solicit(client, *iface, dhcpv6.WithIAPD(
+	adv, err := Solicit(context.Background(), client, dhcpv6.WithIAPD(
 		[4]byte{1, 0, 0, 0},
 		&dhcpv6.OptIAPrefix{
 			PreferredLifetime: 0,
@@ -48,7 +98,6 @@ func main() {
 	))
 
 	// Summary() prints a verbose representation of the exchanged packets.
-	log.Print(sol.Summary())
 	if adv != nil {
 		log.Print(adv.Summary())
 	}
@@ -81,24 +130,27 @@ func NewSolicit(hwaddr net.HardwareAddr, modifiers ...dhcpv6.Modifier) (*dhcpv6.
 	if len(hwaddr) < 4 {
 		return nil, errors.New("short hardware addrss: less than 4 bytes")
 	}
+	// l := len(hwaddr)
+	// var iaid [4]byte
+	// copy(iaid[:], hwaddr[l-4:l])
+	//modifiers = append([]dhcpv6.Modifier{dhcpv6.WithIAID(iaid)}, modifiers...)
+	// Apply modifiers
 	for _, mod := range modifiers {
 		mod(m)
 	}
 	return m, nil
 }
 
-// Solicit sends a Solicit, returns the Solicit, an Advertise (if not nil), and
-// an error if any. The modifiers will be applied to the Solicit before sending
-// it, see modifiers.go
-func Solicit(client *client6.Client, ifname string, modifiers ...dhcpv6.Modifier) (dhcpv6.DHCPv6, dhcpv6.DHCPv6, error) {
-	iface, err := net.InterfaceByName(ifname)
+// Solicit sends a solicitation message and returns the first valid
+// advertisement received.
+func Solicit(ctx context.Context, c *nclient6.Client, modifiers ...dhcpv6.Modifier) (*dhcpv6.Message, error) {
+	solicit, err := NewSolicit(c.InterfaceAddr(), modifiers...)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	solicit, err := NewSolicit(iface.HardwareAddr,modifiers...)
+	msg, err := c.SendAndRead(ctx, c.RemoteAddr(), solicit, nclient6.IsMessageType(dhcpv6.MessageTypeAdvertise))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	advertise, err := client.SendReceive(ifname, solicit, dhcpv6.MessageTypeNone)
-	return solicit, advertise, err
+	return msg, nil
 }
