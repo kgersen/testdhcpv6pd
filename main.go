@@ -51,6 +51,7 @@ func parseInterface(name string) (*net.Interface, error) {
 
 var (
 	optPrefixLength = flag.Int("l", 64, "prefix length")
+	optNoDebug      = flag.Bool("s", false, "dont print debug messages")
 )
 
 func main() {
@@ -70,13 +71,17 @@ func main() {
 	}
 	log.Printf("Sending a DHCPv6-PD Solicit on interface %s", iface.Name)
 
-	client, err := nclient6.New(iface.Name,
+	var client *nclient6.Client
+	client, err = nclient6.New(iface.Name,
 		nclient6.WithTimeout(2*time.Second),
-		nclient6.WithRetry(1),
-		nclient6.WithDebugLogger())
+		nclient6.WithRetry(1))
 
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if !*optNoDebug {
+		nclient6.WithDebugLogger()(client)
 	}
 
 	// send a Solicit with IAPD, no IAID
@@ -111,7 +116,7 @@ func main() {
 			log.Fatal("no prefix found")
 		}
 		for _, p := range prefixes {
-			fmt.Printf("prefix = %s (pttl=%s,vttl=%s)\n", p.Prefix, p.PreferredLifetime, p.ValidLifetime)
+			fmt.Printf("got a prefix = %s (pttl=%s,vttl=%s)\n", p.Prefix, p.PreferredLifetime, p.ValidLifetime)
 		}
 	}
 	// error handling is done *after* printing, so we still print the
