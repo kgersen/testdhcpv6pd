@@ -11,4 +11,6 @@ without argument, `testdhcpv6pd` will display the available interfaces
 use `-s` to suppress packet debug 
 
 ### notes
-not tested on *bsd, darwin
+Not tested on *bsd, darwin, plan9
+
+On Linux systems requires *at least* `cap_net_bind_service` capability to bind to port 546 (see `man 7 capabilities`)

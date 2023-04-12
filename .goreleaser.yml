@@ -5,7 +5,7 @@ before:
     # you may remove this if you don't need go generate
     #- go generate ./...
 builds:
-  - id: nspeed
+  - id: testdhcpv6pd
     binary: testdhcpv6pd
     main: main.go
     env:
