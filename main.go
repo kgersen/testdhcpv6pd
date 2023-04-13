@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"time"
@@ -55,10 +56,10 @@ func parseInterface(name string) (*net.Interface, error) {
 }
 
 var (
-	optPrefixLength = flag.Int("l", 64, "prefix length")
-	optNoDebug      = flag.Bool("s", false, "dont print debug messages")
-	optVersion      = flag.Bool("v", false, "display version")
-	optAnonymize    = flag.String("a", utils.FormatV6Full, "anonymize ip addresses (format = list word indexes to show)")
+	optNoDebug   = flag.Bool("s", false, "dont print debug messages")
+	optVersion   = flag.Bool("v", false, "display version")
+	optAnonymize = flag.String("a", utils.FormatV6Full, "anonymize ip addresses (format = list word indexes to show)")
+	optPrefix    = flag.String("p", "::/64", "ask for a specific prefix and/or length")
 )
 
 func main() {
@@ -69,9 +70,6 @@ func main() {
 		fmt.Println("version", version)
 		os.Exit(0)
 	}
-	if *optPrefixLength < 1 || *optPrefixLength > 128 {
-		log.Fatal("prefix length")
-	}
 	if len(flag.Args()) != 1 {
 		fmt.Printf("Usage: %s [options] [interface name] or [interface index]\n", os.Args[0])
 		displayInterfaces()
@@ -80,6 +78,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	prefix, err := netip.ParsePrefix(*optPrefix)
+	if err != nil {
+		log.Fatal(err)
+	}
 	iface, err := parseInterface(flag.Args()[0])
 	if err != nil {
 		log.Fatal(err)
@@ -116,8 +118,8 @@ func main() {
 			PreferredLifetime: 0,
 			ValidLifetime:     0,
 			Prefix: &net.IPNet{
-				Mask: net.CIDRMask(*optPrefixLength, 128),
-				IP:   net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				Mask: net.CIDRMask(prefix.Bits(), 128),
+				IP:   prefix.Addr().AsSlice(),
 			},
 			Options: dhcpv6.PrefixOptions{Options: dhcpv6.Options{}},
 		},
