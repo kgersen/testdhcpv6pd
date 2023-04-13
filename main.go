@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -84,6 +85,12 @@ func main() {
 		nclient6.WithDebugLogger()(client)
 	}
 
+	// MacOs/darwin needs Zone set to same interface or 'no route to host' error
+	if runtime.GOOS == "darwin" {
+		baddr := nclient6.AllDHCPRelayAgentsAndServers
+		baddr.Zone = iface.Name
+		nclient6.WithBroadcastAddr(baddr)(client)
+	}
 	// send a Solicit with IAPD, no IAID
 	adv, err := Solicit(context.Background(), client, dhcpv6.WithIAPD(
 		[4]byte{1, 0, 0, 0},

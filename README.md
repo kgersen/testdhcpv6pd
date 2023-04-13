@@ -1,14 +1,14 @@
 ## testdhcpv6pd
 
-sends a DHCPv6-PD solicit message and display the response
+Sends a DHCPv6-PD solicit message and displays the response (no request is done)
 
 ### usage:
 
 `testdhcpv6pd [-l prefix-length] [-s] [interface name or index]`
 
-without argument, `testdhcpv6pd` will display the available interfaces
+Without argument, `testdhcpv6pd` will display the available interfaces
 
-use `-s` to suppress packet debug 
+Use `-s` to suppress packet debugging 
 
 ### notes
 Not tested on *bsd, darwin, plan9
