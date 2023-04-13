@@ -2,7 +2,10 @@ module github.com/kgersen/testdhcpv6pd
 
 go 1.20
 
-require github.com/insomniacslk/dhcp v0.0.0-20230407062729-974c6f05fe16
+require (
+	github.com/insomniacslk/dhcp v0.0.0-20230407062729-974c6f05fe16
+	github.com/nspeed-app/nspeed v0.0.10
+)
 
 require (
 	github.com/josharian/native v1.1.0 // indirect

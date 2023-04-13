@@ -8,14 +8,18 @@ import (
 	"log"
 	"net"
 	"os"
-	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/insomniacslk/dhcp/dhcpv6/nclient6"
 	"github.com/insomniacslk/dhcp/iana"
+
+	"github.com/nspeed-app/nspeed/utils"
 )
+
+// version will be filled by goreleaser
+var version string
 
 var interfaces []net.Interface
 
@@ -28,9 +32,9 @@ func init() {
 }
 
 func displayInterfaces() {
-	fmt.Println("available interface - name (index):")
+	fmt.Printf("available interface - name (index):\n\n")
 	for _, v := range interfaces {
-		fmt.Printf("%s (%d)\n", v.Name, v.Index)
+		fmt.Printf("  %s (%d)\n", v.Name, v.Index)
 	}
 }
 func parseInterface(name string) (*net.Interface, error) {
@@ -53,16 +57,26 @@ func parseInterface(name string) (*net.Interface, error) {
 var (
 	optPrefixLength = flag.Int("l", 64, "prefix length")
 	optNoDebug      = flag.Bool("s", false, "dont print debug messages")
+	optVersion      = flag.Bool("v", false, "display version")
+	optAnonymize    = flag.String("a", utils.FormatV6Full, "anonymize ip addresses (format = list word indexes to show)")
 )
 
 func main() {
+
 	flag.Parse()
+
+	if *optVersion {
+		fmt.Println("version", version)
+		os.Exit(0)
+	}
 	if *optPrefixLength < 1 || *optPrefixLength > 128 {
 		log.Fatal("prefix length")
 	}
 	if len(flag.Args()) != 1 {
-		fmt.Printf("Usage: %s [interface name] or [interface index]\n", os.Args[0])
+		fmt.Printf("Usage: %s [options] [interface name] or [interface index]\n", os.Args[0])
 		displayInterfaces()
+		fmt.Println("\nAvailable options:")
+		flag.PrintDefaults()
 		os.Exit(0)
 	}
 
@@ -70,7 +84,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Sending a DHCPv6-PD Solicit on interface %s", iface.Name)
+
+	if !*optNoDebug {
+		log.Printf("Sending a DHCPv6-PD Solicit on interface %s", iface.Name)
+	}
 
 	var client *nclient6.Client
 	client, err = nclient6.New(iface.Name,
@@ -86,7 +103,8 @@ func main() {
 	}
 
 	// MacOs/darwin needs Zone set to same interface or 'no route to host' error
-	if runtime.GOOS == "darwin" {
+	// since this doesn't bother other OSes  , we generalize this
+	if true { // runtime.GOOS == "darwin" {
 		baddr := nclient6.AllDHCPRelayAgentsAndServers
 		baddr.Zone = iface.Name
 		nclient6.WithBroadcastAddr(baddr)(client)
@@ -123,7 +141,7 @@ func main() {
 			log.Fatal("no prefix found")
 		}
 		for _, p := range prefixes {
-			fmt.Printf("got a prefix = %s (pttl=%s,vttl=%s)\n", p.Prefix, p.PreferredLifetime, p.ValidLifetime)
+			log.Printf("got a prefix = %s (pttl=%s,vttl=%s)\n", utils.AnonymizeIPNet(p.Prefix, utils.FormatV4First, *optAnonymize), p.PreferredLifetime, p.ValidLifetime)
 		}
 	}
 	// error handling is done *after* printing, so we still print the
