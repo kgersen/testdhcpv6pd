@@ -11,7 +11,7 @@ require (
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.14 // indirect
 	github.com/u-root/uio v0.0.0-20230220225925-ffce2a382923 // indirect
-	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 )
 
-replace github.com/insomniacslk/dhcp => ../go-dhcp
+replace github.com/insomniacslk/dhcp => github.com/jfgiorgi/dhcp v0.0.0-20231115143038-334fea039657
