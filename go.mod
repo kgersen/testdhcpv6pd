@@ -13,3 +13,5 @@ require (
 	github.com/u-root/uio v0.0.0-20230220225925-ffce2a382923 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 )
+
+replace github.com/insomniacslk/dhcp => ../go-dhcp

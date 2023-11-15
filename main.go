@@ -32,6 +32,27 @@ func init() {
 	}
 }
 
+type myLogger struct {
+	*log.Logger
+	Debug     bool
+	Anonymize string
+}
+
+func NewMyLogger() myLogger {
+	return myLogger{Logger: log.New(os.Stderr, "[dhcpv6] ", log.LstdFlags)}
+}
+
+func (e *myLogger) Printf(format string, v ...interface{}) {
+	if e.Debug {
+		e.Logger.Printf(format, v...)
+	}
+}
+func (e *myLogger) PrintMessage(prefix string, message *dhcpv6.Message) {
+	if e.Debug {
+		e.Printf("%s: %s", prefix, message.Summary())
+	}
+}
+
 func displayInterfaces() {
 	fmt.Printf("available interface - name (index):\n\n")
 	for _, v := range interfaces {
@@ -60,6 +81,8 @@ var (
 	optVersion   = flag.Bool("v", false, "display version")
 	optAnonymize = flag.String("a", utils.FormatV6Full, "anonymize ip addresses (format = list word indexes to show)")
 	optPrefix    = flag.String("p", "::/64", "ask for a specific prefix and/or length")
+	optCLL       = flag.String("cll", "", "specify client layer address using a mac address ( : or - separated digits)")
+	optCID       = flag.String("cid", "", "specify client ID (DUID-LLT) using a mac address ( : or - separated digits)")
 )
 
 func main() {
@@ -91,17 +114,17 @@ func main() {
 		log.Printf("Sending a DHCPv6-PD Solicit on interface %s", iface.Name)
 	}
 
+	logger := NewMyLogger()
+	logger.Debug = !*optNoDebug
+	logger.Anonymize = *optAnonymize
 	var client *nclient6.Client
 	client, err = nclient6.New(iface.Name,
 		nclient6.WithTimeout(2*time.Second),
-		nclient6.WithRetry(1))
+		nclient6.WithRetry(1),
+		nclient6.WithLogger(&logger))
 
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if !*optNoDebug {
-		nclient6.WithDebugLogger()(client)
 	}
 
 	// MacOs/darwin needs Zone set to same interface or 'no route to host' error
@@ -111,8 +134,9 @@ func main() {
 		baddr.Zone = iface.Name
 		nclient6.WithBroadcastAddr(baddr)(client)
 	}
-	// send a Solicit with IAPD, no IAID
-	adv, err := Solicit(context.Background(), client, dhcpv6.WithIAPD(
+	// build solicit options
+	var modifiers []dhcpv6.Modifier
+	modifiers = append(modifiers, dhcpv6.WithIAPD(
 		[4]byte{1, 0, 0, 0},
 		&dhcpv6.OptIAPrefix{
 			PreferredLifetime: 0,
@@ -122,8 +146,29 @@ func main() {
 				IP:   prefix.Addr().AsSlice(),
 			},
 			Options: dhcpv6.PrefixOptions{Options: dhcpv6.Options{}},
-		},
-	))
+		}))
+	if *optCLL != "" {
+		mac, err := net.ParseMAC(*optCLL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		modifiers = append(modifiers, dhcpv6.WithClientLinkLayerAddress(iana.HWTypeEthernet, mac))
+	}
+
+	if *optCID != "" {
+		mac, err := net.ParseMAC(*optCID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		modifiers = append(modifiers, dhcpv6.WithClientID(&dhcpv6.DUIDLLT{
+			HWType:        iana.HWTypeEthernet,
+			Time:          dhcpv6.GetTime(),
+			LinkLayerAddr: mac,
+		}))
+	}
+
+	// send a Solicit with IAPD, no IAID
+	adv, err := Solicit(context.Background(), client, modifiers...)
 
 	// Summary() prints a verbose representation of the exchanged packets.
 	if adv != nil {
