@@ -16,7 +16,7 @@ import (
 	"github.com/insomniacslk/dhcp/dhcpv6/nclient6"
 	"github.com/insomniacslk/dhcp/iana"
 
-	"github.com/nspeed-app/nspeed/utils"
+	"nspeed.app/nspeed/utils"
 )
 
 // version will be filled by goreleaser
@@ -147,6 +147,7 @@ func main() {
 			},
 			Options: dhcpv6.PrefixOptions{Options: dhcpv6.Options{}},
 		}))
+
 	if *optCLL != "" {
 		mac, err := net.ParseMAC(*optCLL)
 		if err != nil {
@@ -175,20 +176,22 @@ func main() {
 		if adv.MessageType != dhcpv6.MessageTypeAdvertise {
 			log.Fatal("unexcepted message type")
 		}
-		IAPDOption := adv.GetOneOption(dhcpv6.OptionIAPD)
-		if IAPDOption == nil {
+		opts := adv.GetOption(dhcpv6.OptionIAPD)
+		if opts == nil {
 			log.Fatal("no IAPD found")
 		}
-		iapd := dhcpv6.OptIAPD{}
-		if err := iapd.FromBytes(IAPDOption.ToBytes()); err != nil {
-			log.Fatal("cant parse iadp")
-		}
-		prefixes := iapd.Options.Prefixes()
-		if prefixes == nil {
-			log.Fatal("no prefix found")
-		}
-		for _, p := range prefixes {
-			log.Printf("got a prefix = %s (pttl=%s,vttl=%s)\n", utils.AnonymizeIPNet(p.Prefix, utils.FormatV4First, *optAnonymize), p.PreferredLifetime, p.ValidLifetime)
+		for _, opt := range opts {
+			iapd := dhcpv6.OptIAPD{}
+			if err := iapd.FromBytes(opt.ToBytes()); err != nil {
+				log.Fatal("cant parse iadp")
+			}
+			prefixes := iapd.Options.Prefixes()
+			if prefixes == nil {
+				log.Fatal("no prefix found")
+			}
+			for _, p := range prefixes {
+				log.Printf("got a prefix = %s (pttl=%s,vttl=%s)\n", utils.AnonymizeIPNet(p.Prefix, utils.FormatV4First, *optAnonymize), p.PreferredLifetime, p.ValidLifetime)
+			}
 		}
 	}
 	// error handling is done *after* printing, so we still print the
