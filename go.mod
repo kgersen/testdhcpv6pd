@@ -1,4 +1,4 @@
-module github.com/kgersen/testdhcpv6pd
+module github.com/nspeed-app/testdhcpv6pd
 
 go 1.24.0
 

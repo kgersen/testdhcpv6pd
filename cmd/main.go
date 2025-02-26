@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/insomniacslk/dhcp/iana"
-	dhcp6c "github.com/kgersen/testdhcpv6pd"
+	dhcp6c "github.com/nspeed-app/testdhcpv6pd"
 
 	"nspeed.app/nspeed/utils"
 )
