@@ -23,15 +23,21 @@ Available options:
   -s    dont print debug messages
   -test
         dry-run only,  print the solicit paquet, nothing is send on the network
-  -v    display version````
+  -v    display version
+````
 
 Without argument, `testdhcpv6pd` will display the available interfaces
 
-Use `-s` to suppress packet debugging 
+Use -s to suppress packet debugging 
 
-Use `-a format` to anonymize the prefix where format is a list of indexes. Each index, from 1 to 8, is the part number of the address to keep. For instance `-a "18"` only keeps the first and last part of the address.
+Use `-a format` to anonymize the prefix where `format` is a list of indexes. 
+Each index, from 1 to 8, is the nibble (field) number of the address to display (1111:2222:3333:4444:5555:6666:7777:8888).
+Non displayed parts will be replaced by `s`.
+For instance `-a 18` only keeps the first and last part of the address.
+Likewise, `-a 14` will display  `2a01:xxxx:xxxx:1234::/64` instead of `2a01:341c:325d:1234::/64`
 
-Use `-p ::/60` to request a /60 prefix or even `-p 2a01:xxx:xxxx:xxxx::/64,` to request a specific prefix. can be repeated. `iaid` used 1, 2, etc
+Use `-p ::/60` to request a /60 prefix or even `-p 2a01:xxxx:xxxx:xxxx::/64` to request a specific prefix. 
+Can be repeated. The values used for the `iaid` are 1, 2, etc
 
 Other options allow to change the DUID.
 
