@@ -7,7 +7,7 @@ before:
 builds:
   - id: testdhcpv6pd
     binary: testdhcpv6pd
-    main: main.go
+    main: cmd/main.go
     env:
       - CGO_ENABLED=0
     goos:
