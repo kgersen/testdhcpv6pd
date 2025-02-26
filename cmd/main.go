@@ -230,6 +230,8 @@ func main() {
 		LinkLayerAddr: hmac,
 	}
 
+	// type 2 ? (todo?)
+
 	// type 3
 	if *optDUID3 != "" {
 		if DUIDset {
